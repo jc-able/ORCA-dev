@@ -1,0 +1,52 @@
+{
+  "name": "orca-lead-management",
+  "version": "1.0.0",
+  "description": "ORCA Lead Management Software for membership-based businesses",
+  "main": "index.js",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "start": "concurrently \"npm run start:client\" \"npm run start:server\"",
+    "start:client": "cd client && npm start",
+    "start:server": "cd server && npm start",
+    "dev": "concurrently \"npm run dev:client\" \"npm run dev:server\"",
+    "dev:client": "cd client && npm run dev",
+    "dev:server": "cd server && npm run dev",
+    "build": "npm run build:client && npm run build:server",
+    "build:client": "cd client && npm run build",
+    "build:server": "cd server && npm run build",
+    "test": "concurrently \"npm run test:client\" \"npm run test:server\"",
+    "test:client": "cd client && npm test",
+    "test:server": "cd server && npm test",
+    "vercel-build": "npm run build",
+    "deploy": "vercel --prod",
+    "predeploy": "npm run build",
+    "prepare": "node ./scripts/prepare.js",
+    "check-schema": "node server/db/tools/schema-consistency-checker.js"
+  },
+  "keywords": [
+    "lead-management",
+    "sales",
+    "referrals",
+    "gym",
+    "membership"
+  ],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.1",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.1.0",
+    "vercel": "^32.4.1"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "lint-staged": {
+    "server/db/schema/types.ts": "npm run check-schema",
+    "server/models/*.js": "npm run check-schema"
+  }
+} 

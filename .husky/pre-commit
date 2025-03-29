@@ -1,0 +1,17 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Run lint-staged which includes schema validation
+npx lint-staged
+
+# Additional safety check - run schema validation directly
+echo "Running schema consistency checks..."
+node server/db/tools/schema-consistency-checker.js
+
+# If the schema validation fails, prevent the commit
+if [ $? -ne 0 ]; then
+  echo "❌ Schema consistency check failed. Please fix the issues before committing."
+  exit 1
+fi
+
+echo "✅ Schema consistency check passed!" 
