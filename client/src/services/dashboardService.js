@@ -548,9 +548,10 @@ export const fetchPriorityLeads = async () => {
     );
     const userId = user?.id;
 
-    // Find leads with high readiness score or estimated value
-    // that haven't been contacted recently (high-value opportunities)
-    const { data: priorityLeads, error } = await withApiKey(() => 
+    // Instead of using a complex OR condition, run three separate queries and combine results
+    
+    // Query 1: High readiness score leads
+    const { data: highReadinessLeads, error: error1 } = await withApiKey(() => 
       supabase
         .from('persons')
         .select(`
@@ -571,13 +572,109 @@ export const fetchPriorityLeads = async () => {
         .eq('is_lead', true)
         .eq('active_status', true)
         .eq('assigned_to', userId)
-        .or('and(lead_extensions.readiness_score.gte.7),and(lead_extensions.conversion_probability.gte.70),and(lead_extensions.lead_temperature.eq.hot)')
+        .gte('lead_extensions.readiness_score', 7)
         .order('lead_extensions(readiness_score)', { ascending: false })
-        .order('lead_extensions(conversion_probability)', { ascending: false })
-        .limit(5)
+        .limit(10)
     );
 
-    if (error) throw error;
+    if (error1) console.error("Error fetching high readiness leads:", error1);
+    
+    // Query 2: High conversion probability leads
+    const { data: highProbabilityLeads, error: error2 } = await withApiKey(() => 
+      supabase
+        .from('persons')
+        .select(`
+          id,
+          first_name,
+          last_name,
+          email,
+          phone,
+          last_contacted,
+          lead_extensions!inner (
+            lead_status,
+            readiness_score,
+            lead_temperature,
+            estimated_value,
+            conversion_probability
+          )
+        `)
+        .eq('is_lead', true)
+        .eq('active_status', true)
+        .eq('assigned_to', userId)
+        .gte('lead_extensions.conversion_probability', 70)
+        .order('lead_extensions(conversion_probability)', { ascending: false })
+        .limit(10)
+    );
+
+    if (error2) console.error("Error fetching high probability leads:", error2);
+    
+    // Query 3: Hot temperature leads
+    const { data: hotLeads, error: error3 } = await withApiKey(() => 
+      supabase
+        .from('persons')
+        .select(`
+          id,
+          first_name,
+          last_name,
+          email,
+          phone,
+          last_contacted,
+          lead_extensions!inner (
+            lead_status,
+            readiness_score,
+            lead_temperature,
+            estimated_value,
+            conversion_probability
+          )
+        `)
+        .eq('is_lead', true)
+        .eq('active_status', true)
+        .eq('assigned_to', userId)
+        .eq('lead_extensions.lead_temperature', 'hot')
+        .order('lead_extensions(readiness_score)', { ascending: false })
+        .limit(10)
+    );
+
+    if (error3) console.error("Error fetching hot leads:", error3);
+    
+    // If all queries failed, throw an error
+    if (error1 && error2 && error3) {
+      throw new Error("All priority lead queries failed");
+    }
+    
+    // Combine and deduplicate results
+    const allLeads = [
+      ...(highReadinessLeads || []),
+      ...(highProbabilityLeads || []),
+      ...(hotLeads || [])
+    ];
+    
+    // Deduplicate by ID
+    const uniqueLeadsMap = new Map();
+    allLeads.forEach(lead => {
+      uniqueLeadsMap.set(lead.id, lead);
+    });
+    
+    // Convert back to array
+    const uniqueLeads = Array.from(uniqueLeadsMap.values());
+    
+    // Sort by readiness score and conversion probability (descending)
+    uniqueLeads.sort((a, b) => {
+      // First by readiness score
+      const readinessA = a.lead_extensions[0].readiness_score || 0;
+      const readinessB = b.lead_extensions[0].readiness_score || 0;
+      if (readinessB !== readinessA) {
+        return readinessB - readinessA;
+      }
+      
+      // Then by conversion probability
+      const probA = a.lead_extensions[0].conversion_probability || 0;
+      const probB = b.lead_extensions[0].conversion_probability || 0;
+      return probB - probA;
+    });
+    
+    // Limit to 5 results
+    const priorityLeads = uniqueLeads.slice(0, 5);
 
     return priorityLeads.map(lead => ({
       id: lead.id,
